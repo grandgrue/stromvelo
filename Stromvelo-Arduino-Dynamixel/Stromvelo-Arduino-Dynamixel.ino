@@ -69,11 +69,11 @@ double Ampere = 0;
 double AmpPos = 0;
 double AmpPosWeich = 0;
 double AmpPosBisher = 0;
-int Ausschlag = 0;
+int Ausschlag = 614;
 int killTimer = 0;
 int running = 0;
 double AmpCollected = 0;
-double delayms = 500;
+double delayms = 500; // zwischen den Messungen eine halbe Sekunde warten
 double fulltime = 60000;
 double timerms = 0;
 int ZeitServoAusschlag = 0;
@@ -137,8 +137,14 @@ void loop()
   Serial.print(",AmpPosWeich:"); // immer Positiv 
   Serial.print(AmpPosWeich,2); // Die "2" hinter dem Komma erzeugt zwei Nachkommastellen
 
+  // Hier wird der Schwellwert gesetzt, bei welcher Ampere-Anzahl
+  // der Wert überhaupt verwendet werden soll.
+  // Dies ist notwenig, da viel Noise bei der Messung entsteht
 
-  if (AmpPosWeich > 0.24) { /* STANDARD 0.3 - THIS IS DEMO */ 
+  // grm 17.5.2025 / Bisher war 0.24 ein guter Wert
+  // Ich setze diesen runter um einen Dauerbetrieb zu simulieren
+  // MUSS WIEDER ZURUECKGESETZT WERDEN!
+  if (AmpPosWeich > 0.15 && Ausschlag > 0) { 
     if (running==0) {
       timerms = fulltime;
     }
@@ -148,7 +154,11 @@ void loop()
   } else {
     if (running==1) {
       killTimer = killTimer + 1;
-      if (killTimer > 10) {
+      // Falls 10 Delay (also 5 Sec) kein neuer Impuls, wird die Scheibe zurückgesetzt
+      // grm 17.5.2025 / Zum Lasttest, verändere ich die Bedingung
+      // MUSS WIEDER ZURUECKGESETZT WERDEN!
+      if (Ausschlag == 0) {
+      //if (killTimer > 10) {
         running = 0;
         killTimer = 0;
         AmpCollected = 0;
@@ -179,6 +189,8 @@ void loop()
   // Für 180 Grad Bewegung ist das max bei 614
   // Damit er nicht zu sehr hüpft wird es in 5er-Schritten gerundet
   Ausschlag = 614 - round(AmpCollected / 20 * 614 / 2) * 2; 
+  // Wenn er am Ziel (Ausschlag=0) angelangt ist, bleibt er stehen
+  // auch wenn neue Werte dazukommen und so ins Minus gehen
   if (Ausschlag < 0) {
     Ausschlag = 0;
   }
