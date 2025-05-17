@@ -1,4 +1,18 @@
 /*
+Stromvelo-Arduino-Dynamixel.ino
+
+Dieser für einen Arduino Mega mit angeschlossenem Dynamixel AX-12 Servo geschriebener
+Code, dreht eine Weltscheibe, wenn ein Strom von einem Generator, der durch ein
+Fahrrad angetrieben gemessen wird. 
+Der Strom wird mit einem Stromstärkesensor ACS712 gemessen.
+
+Zur Ansteuerung der Servos habe ich kein Dynamixel-Shield zur Verfügung.
+Aus diesem Grund steuere ich den Servo direkt über die Daten-Schnittstelle
+des Arduino an. Die dafür eingesetzte Technik habe ich von 
+DynamixelMxMonitorBlock.ino welches von Akira geschrieben wurde übernommen.
+Untenstehend ist der Originalheader davon.
+
+ *****************************************************************************
 DynamixelMxMonitorBlock.ino
 written by Akira
 
@@ -117,8 +131,9 @@ void loop()
   Serial.print(",AmpPos:"); // immer Positiv 
   Serial.print(AmpPos,3); // Die "3" hinter dem Komma erzeugt drei Nachkommastellen
   
-  
-  AmpPosWeich = ((AmpPosBisher)*2 + AmpPos) / 3; // Der neue Wert zählt nur 1/5el 
+  // Wegen recht grossen Schwankungen wird der Wert mit dem vorherigen Wert 
+  // verrechnet umd einen weicheren (geglätteten) Ampere-Wert zu erhalten
+  AmpPosWeich = ((AmpPosBisher)*2 + AmpPos) / 3; // Der neue Wert zählt nur 1/3el 
   Serial.print(",AmpPosWeich:"); // immer Positiv 
   Serial.print(AmpPosWeich,2); // Die "2" hinter dem Komma erzeugt zwei Nachkommastellen
 
