@@ -52,8 +52,8 @@ dxlAx dxlCom(&port);
 
 String _readString;         // Input string from serial monitor
 bool _strComplete = false;
-int _id = 1;                // Default Dynamixel servo ID
-int _idZeit = 2;            // Zweiter Dynamixel für Zeitanzeige
+int _id = 1;                // Default Dynamixel servo ID für Scheibe
+int _idZeit = 2;            // Zweiter Dynamixel für Zeitanzeige auf der linken Seite, deaktiviert
 
 
 /* Basiswerte für Stromstärkesensor ACS712 */
@@ -97,8 +97,10 @@ void setup() {
   dxlCom.setMovingSpeed(_id, 150); // set velocity to 200(range:0-300) in Servo mode
   dxlCom.setGoalPosition(_id, 614);
   
+  /* Deaktivere Zeitanzeige um Strom zu sparen
   dxlCom.setMovingSpeed(_idZeit, 150); // set velocity to 200(range:0-300) in Servo mode
   dxlCom.setGoalPosition(_idZeit, 0); 
+  */
 
 }
 
@@ -165,8 +167,10 @@ void loop()
         dxlCom.setMovingSpeed(_id, 100); // set velocity to 200(range:0-300) in Servo mode
         dxlCom.setGoalPosition(_id, 614);
         timerms = 0;
+        /* Deaktivere Zeitanzeige um Strom zu sparen 
         dxlCom.setMovingSpeed(_idZeit, 100); // set velocity to 200(range:0-300) in Servo mode
-        dxlCom.setGoalPosition(_idZeit, 0);        
+        dxlCom.setGoalPosition(_idZeit, 0);    
+        */    
       }
     }
   }
@@ -208,8 +212,10 @@ void loop()
     timerms = 0;
   }
   ZeitServoAusschlag = round(timerms / fulltime * 1023); 
+  /* Deaktiviere Zeitanzeige um Strom zu sparen 
   dxlCom.setMovingSpeed(_idZeit, 25); // set velocity to 200(range:0-300) in Servo mode
   dxlCom.setGoalPosition(_idZeit, ZeitServoAusschlag);
+  */
 
   Serial.print(",ZeitServoAusschlag:"); // shows the voltage measured 
   Serial.println(ZeitServoAusschlag); 
