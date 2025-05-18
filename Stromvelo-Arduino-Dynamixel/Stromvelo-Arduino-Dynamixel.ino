@@ -94,6 +94,7 @@ void setup() {
 
   dxlCom.begin(57600);
 
+  // Zum Start wird die Weltscheibe korrekt ausgerichtet: Position 614 = oben / 0 = unten
   dxlCom.setMovingSpeed(_id, 150); // set velocity to 200(range:0-300) in Servo mode
   dxlCom.setGoalPosition(_id, 614);
   
@@ -146,7 +147,8 @@ void loop()
   // grm 17.5.2025 / Bisher war 0.24 ein guter Wert
   // Ich setze diesen runter um einen Dauerbetrieb zu simulieren
   // MUSS WIEDER ZURUECKGESETZT WERDEN!
-  if (AmpPosWeich > 0.15 && Ausschlag > 0) { 
+  //if (AmpPosWeich > 0.14 && Ausschlag > 0) { 
+  if (AmpPosWeich > 0.25 && Ausschlag > 0) { 
     if (running==0) {
       timerms = fulltime;
     }
@@ -159,14 +161,16 @@ void loop()
       // Falls 10 Delay (also 5 Sec) kein neuer Impuls, wird die Scheibe zurückgesetzt
       // grm 17.5.2025 / Zum Lasttest, verändere ich die Bedingung
       // MUSS WIEDER ZURUECKGESETZT WERDEN!
-      if (Ausschlag == 0) {
-      //if (killTimer > 10) {
+      //if (Ausschlag == 0) {
+      if (killTimer > 10) {
         running = 0;
         killTimer = 0;
         AmpCollected = 0;
         dxlCom.setMovingSpeed(_id, 100); // set velocity to 200(range:0-300) in Servo mode
         dxlCom.setGoalPosition(_id, 614);
         timerms = 0;
+        // 4 Sekunden warten, damit Scheibe fertig gedreht ist bevor es weitergeht
+        delay(4000);
         /* Deaktivere Zeitanzeige um Strom zu sparen 
         dxlCom.setMovingSpeed(_idZeit, 100); // set velocity to 200(range:0-300) in Servo mode
         dxlCom.setGoalPosition(_idZeit, 0);    
