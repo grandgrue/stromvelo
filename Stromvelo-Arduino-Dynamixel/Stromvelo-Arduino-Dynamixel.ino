@@ -14,7 +14,7 @@ Hardware-Setup:
 - Kommunikation über Pin 50 (unterstützt Pin Change Interrupts)
 
 Funktionsweise:
-1. Auto-Kalibrierung beim Start (5 Sekunden Leerlauf-Messung)
+1. Auto-Kalibrierung beim Start (2s Warten + 5s Leerlauf-Messung)
 2. Kontinuierliche Strommessung alle 500ms
 3. Glättung der Messwerte zur Rauschunterdrückung  
 4. Akkumulation der Stromwerte während aktiver Produktion
@@ -74,12 +74,17 @@ int _idZeit = 2;            // Zweiter Servo für Zeitanzeige (deaktiviert)
 
 /* ===== AUTO-KALIBRIERUNG VARIABLEN ===== */
 bool kalibrierungAktiv = true;      // Flag für laufende Kalibrierung
+bool wartePhaseAktiv = true;        // Flag für 2-Sekunden Wartephase
 unsigned long kalibrierungStart = 0; // Startzeit der Kalibrierung
+unsigned long warteStart = 0;       // Startzeit der Wartephase
+const unsigned long WARTE_DAUER = 2000;     // 2 Sekunden warten vor Messung
 const unsigned long KALIBRIERUNG_DAUER = 5000; // 5 Sekunden Kalibrierung
 double maxLeerlaufWert = 0.0;       // Maximaler gemessener Leerlauf-Wert
 double schwellwert = 0.27;          // Berechneter Schwellwert (Initial-Default)
-const double SCHWELLWERT_OFFSET = 0.01; // Sicherheitsabstand über Leerlauf
+const double SCHWELLWERT_OFFSET = 0.05; // Sicherheitsabstand über Leerlauf
 int kalibrierungMessungen = 0;      // Anzahl Kalibrierungs-Messungen
+double kalibrierungAmpPosWeich = 0; // Geglätteter Wert für Kalibrierung
+double kalibrierungAmpPosBisher = 0; // Vorheriger Wert für Kalibrierungs-Glättung
 
 /* ===== STROMSENSOR KONFIGURATION (ACS712) ===== */
 const int Sensor = A0;      // Analoger Eingang für Stromsensor
@@ -136,11 +141,14 @@ void setup() {
 
   // Auto-Kalibrierung starten
   Serial.println("=== AUTO-KALIBRIERUNG STARTET ===");
-  Serial.println("Bitte 5 Sekunden NICHT in die Pedale treten!");
-  Serial.println("Messe Leerlauf-Rauschen...");
-  kalibrierungStart = millis();
+  Serial.println("System stabilisiert sich - bitte warten...");
+  Serial.println("Anschließend 5 Sekunden NICHT in die Pedale treten!");
+  warteStart = millis();
+  kalibrierungStart = 0;  // wird nach Wartephase gesetzt
   maxLeerlaufWert = 0.0;
   kalibrierungMessungen = 0;
+  kalibrierungAmpPosWeich = 0;
+  kalibrierungAmpPosBisher = 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -148,7 +156,29 @@ void setup() {
 void loop() {
   /* ===== AUTO-KALIBRIERUNG PHASE ===== */
   if (kalibrierungAktiv) {
-    // Prüfen ob Kalibrierungszeit abgelaufen
+    
+    // Erste Phase: 2 Sekunden warten (System stabilisieren)
+    if (wartePhaseAktiv) {
+      if (millis() - warteStart >= WARTE_DAUER) {
+        // Wartephase beendet, Kalibrierung starten
+        wartePhaseAktiv = false;
+        kalibrierungStart = millis();
+        Serial.println("Wartephase beendet - Kalibrierung startet...");
+        Serial.println("Messe Leerlauf-Rauschen mit Glättung...");
+      } else {
+        // Wartephase läuft noch
+        unsigned long verbleibendeWartezeit = WARTE_DAUER - (millis() - warteStart);
+        if (millis() % 1000 < 50) { // Ausgabe etwa alle Sekunde
+          Serial.print("Stabilisierung... ");
+          Serial.print(verbleibendeWartezeit / 1000 + 1);
+          Serial.println("s verbleibend");
+        }
+        delay(delayms);
+        return; // Hauptloop überspringen während Wartephase
+      }
+    }
+    
+    // Zweite Phase: Eigentliche Kalibrierung mit Glättung
     if (millis() - kalibrierungStart >= KALIBRIERUNG_DAUER) {
       // Kalibrierung abschließen
       kalibrierungAktiv = false;
@@ -157,7 +187,7 @@ void loop() {
       Serial.println("=== KALIBRIERUNG ABGESCHLOSSEN ===");
       Serial.print("Messungen: ");
       Serial.println(kalibrierungMessungen);
-      Serial.print("Max. Leerlauf-Wert: ");
+      Serial.print("Max. geglätteter Leerlauf-Wert: ");
       Serial.print(maxLeerlaufWert, 4);
       Serial.println(" A");
       Serial.print("Berechneter Schwellwert: ");
@@ -166,15 +196,19 @@ void loop() {
       Serial.println("System bereit - Strommessung startet...");
       Serial.println("=====================================");
     } else {
-      // Kalibrierungs-Messungen durchführen
+      // Kalibrierungs-Messungen mit identischer Glättung wie im Hauptloop
       sensorwert = analogRead(Sensor);
       SensorSpannung = (sensorwert / 1024.0) * 5000;
       Ampere = ((SensorSpannung - Nullpunkt) / VpA);
-      AmpPos = (Ampere < 0) ? 0 : Ampere;
+      double kalibrierungAmpPos = (Ampere < 0) ? 0 : Ampere;
       
-      // Maximum der Leerlauf-Werte tracken
-      if (AmpPos > maxLeerlaufWert) {
-        maxLeerlaufWert = AmpPos;
+      // Identische Glättung wie im Hauptloop
+      kalibrierungAmpPosBisher = kalibrierungAmpPosWeich;
+      kalibrierungAmpPosWeich = ((kalibrierungAmpPosBisher * 2) + kalibrierungAmpPos) / 3;
+      
+      // Maximum der geglätteten Leerlauf-Werte tracken
+      if (kalibrierungAmpPosWeich > maxLeerlaufWert) {
+        maxLeerlaufWert = kalibrierungAmpPosWeich;
       }
       
       kalibrierungMessungen++;
@@ -184,9 +218,11 @@ void loop() {
         unsigned long verbleibendeZeit = KALIBRIERUNG_DAUER - (millis() - kalibrierungStart);
         Serial.print("Kalibrierung... ");
         Serial.print(verbleibendeZeit / 1000);
-        Serial.print("s verbleibend, aktueller Max: ");
+        Serial.print("s verbleibend, aktueller geglätteter Max: ");
         Serial.print(maxLeerlaufWert, 4);
-        Serial.println(" A");
+        Serial.print(" A (roh: ");
+        Serial.print(kalibrierungAmpPos, 4);
+        Serial.println(" A)");
       }
       
       delay(delayms);
