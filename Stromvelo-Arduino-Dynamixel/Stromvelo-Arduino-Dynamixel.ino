@@ -81,7 +81,7 @@ const unsigned long WARTE_DAUER = 2000;     // 2 Sekunden warten vor Messung
 const unsigned long KALIBRIERUNG_DAUER = 5000; // 5 Sekunden Kalibrierung
 double maxLeerlaufWert = 0.0;       // Maximaler gemessener Leerlauf-Wert
 double schwellwert = 0.27;          // Berechneter Schwellwert (Initial-Default)
-const double SCHWELLWERT_OFFSET = 0.05; // Sicherheitsabstand über Leerlauf
+const double SCHWELLWERT_OFFSET = 0.06; // Sicherheitsabstand über Leerlauf
 int kalibrierungMessungen = 0;      // Anzahl Kalibrierungs-Messungen
 double kalibrierungAmpPosWeich = 0; // Geglätteter Wert für Kalibrierung
 double kalibrierungAmpPosBisher = 0; // Vorheriger Wert für Kalibrierungs-Glättung
@@ -326,11 +326,11 @@ void loop() {
   /* ===== SERVO-POSITIONSBERECHNUNG ===== */
   
   // Mapping: Gesammelte Energie -> Servo-Position
-  // - Maximum: 20A entspricht 180° Bewegung
+  // - Maximum: 50A entspricht 180° Bewegung (angepasst für 200ms Intervall)
   // - Servo-Range: 0-1023 für 300°, davon 614 für 180°
   // - Position 614 = Start (oben), Position 0 = Ziel (unten)
   // - Einzelne Positionsschritte für flüssige Bewegung
-  Ausschlag = 614 - round(AmpCollected / 20 * 614);
+  Ausschlag = 614 - round(AmpCollected / 50 * 614);
   
   // Begrenzung: Nicht unter Null (Zielposition erreicht)
   if (Ausschlag < 0) {
