@@ -15,7 +15,7 @@ Hardware-Setup:
 
 Funktionsweise:
 1. Auto-Kalibrierung beim Start (2s Warten + 5s Leerlauf-Messung)
-2. Kontinuierliche Strommessung alle 500ms
+2. Kontinuierliche Strommessung alle 200ms (optimiert für flüssige Bewegung)
 3. Glättung der Messwerte zur Rauschunterdrückung  
 4. Akkumulation der Stromwerte während aktiver Produktion
 5. Servo-Position basierend auf gesammelter Energie
@@ -106,7 +106,7 @@ int running = 0;            // Status: 0=inaktiv, 1=aktive Stromerzeugung
 double AmpCollected = 0;    // Akkumulierte Stromwerte seit Start
 
 /* ===== TIMING KONFIGURATION ===== */
-const double delayms = 500;     // Messintervall in ms
+const double delayms = 200;     // Messintervall in ms (optimiert für flüssige Bewegung)
 const double fulltime = 60000;  // Gesamtzeit für Timer in ms (1 Minute)
 double timerms = 0;             // Verbleibende Timer-Zeit
 int ZeitServoAusschlag = 0;     // Position für Zeit-Servo (deaktiviert)
@@ -213,7 +213,7 @@ void loop() {
       
       kalibrierungMessungen++;
       
-      // Progress-Anzeige alle Sekunde
+      // Progress-Anzeige alle Sekunde (angepasst für 200ms Intervall)
       if (kalibrierungMessungen % (int)(1000/delayms) == 0) {
         unsigned long verbleibendeZeit = KALIBRIERUNG_DAUER - (millis() - kalibrierungStart);
         Serial.print("Kalibrierung... ");
@@ -288,8 +288,8 @@ void loop() {
     if (running == 1) {
       killTimer++;
       
-      // Nach 10 Messzyklen ohne Strom (5 Sekunden) zurücksetzen
-      if (killTimer > 10) {
+      // Nach 25 Messzyklen ohne Strom (5 Sekunden bei 200ms Intervall) zurücksetzen
+      if (killTimer > 25) {
         Serial.println(" -> Energieproduktion beendet - Reset");
         running = 0;
         killTimer = 0;
@@ -329,8 +329,8 @@ void loop() {
   // - Maximum: 20A entspricht 180° Bewegung
   // - Servo-Range: 0-1023 für 300°, davon 614 für 180°
   // - Position 614 = Start (oben), Position 0 = Ziel (unten)
-  // - Rundung auf 2er-Schritte für sanftere Bewegung
-  Ausschlag = 614 - round(AmpCollected / 20 * 614 / 2) * 2;
+  // - Einzelne Positionsschritte für flüssige Bewegung
+  Ausschlag = 614 - round(AmpCollected / 20 * 614);
   
   // Begrenzung: Nicht unter Null (Zielposition erreicht)
   if (Ausschlag < 0) {
@@ -340,13 +340,13 @@ void loop() {
   Serial.print(",Servo:");
   Serial.print(Ausschlag);
 
-  // Servo-Bewegung mit reduzierter Geschwindigkeit für sanfte Bewegung
-  dxlCom.setMovingSpeed(_id, 50);
+  // Servo-Bewegung mit optimierter Geschwindigkeit für flüssige Bewegung
+  dxlCom.setMovingSpeed(_id, 100);
   dxlCom.setGoalPosition(_id, Ausschlag);
 
   /* ===== TIMING UND ZEITANZEIGE ===== */
   
-  // Haupt-Loop-Timing
+  // Haupt-Loop-Timing (200ms für flüssigere Updates)
   delay(delayms);
   
   // Timer herunterzählen
