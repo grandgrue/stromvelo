@@ -180,7 +180,7 @@ void loop() {
       kalibrierungMessungen++;
       
       // Progress-Anzeige alle Sekunde
-      if (kalibrierungMessungen % (1000/delayms) == 0) {
+      if (kalibrierungMessungen % (int)(1000/delayms) == 0) {
         unsigned long verbleibendeZeit = KALIBRIERUNG_DAUER - (millis() - kalibrierungStart);
         Serial.print("Kalibrierung... ");
         Serial.print(verbleibendeZeit / 1000);
