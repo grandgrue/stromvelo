@@ -148,7 +148,7 @@ void loop()
   // Ich setze diesen runter um einen Dauerbetrieb zu simulieren
   // MUSS WIEDER ZURUECKGESETZT WERDEN!
   //if (AmpPosWeich > 0.14 && Ausschlag > 0) { 
-  if (AmpPosWeich > 0.25 && Ausschlag > 0) { 
+  if (AmpPosWeich > 0.27 && Ausschlag > 0) { 
     if (running==0) {
       timerms = fulltime;
     }
