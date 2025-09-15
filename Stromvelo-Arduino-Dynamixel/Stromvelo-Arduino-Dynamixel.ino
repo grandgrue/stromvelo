@@ -14,11 +14,12 @@ Hardware-Setup:
 - Kommunikation über Pin 50 (unterstützt Pin Change Interrupts)
 
 Funktionsweise:
-1. Kontinuierliche Strommessung alle 500ms
-2. Glättung der Messwerte zur Rauschunterdrückung  
-3. Akkumulation der Stromwerte während aktiver Produktion
-4. Servo-Position basierend auf gesammelter Energie
-5. Automatisches Zurücksetzen nach Inaktivität
+1. Auto-Kalibrierung beim Start (5 Sekunden Leerlauf-Messung)
+2. Kontinuierliche Strommessung alle 500ms
+3. Glättung der Messwerte zur Rauschunterdrückung  
+4. Akkumulation der Stromwerte während aktiver Produktion
+5. Servo-Position basierend auf gesammelter Energie
+6. Automatisches Zurücksetzen nach Inaktivität
 
 Zur Ansteuerung der Servos wird keine Dynamixel-Shield verwendet.
 Die direkte Kommunikation basiert auf Code von Akira's DynamixelMxMonitorBlock.ino
@@ -70,6 +71,15 @@ bool _strComplete = false;  // Flag für vollständige String-Eingabe
 // Dynamixel Servo IDs
 int _id = 1;                // Hauptservo für Energieanzeige-Scheibe
 int _idZeit = 2;            // Zweiter Servo für Zeitanzeige (deaktiviert)
+
+/* ===== AUTO-KALIBRIERUNG VARIABLEN ===== */
+bool kalibrierungAktiv = true;      // Flag für laufende Kalibrierung
+unsigned long kalibrierungStart = 0; // Startzeit der Kalibrierung
+const unsigned long KALIBRIERUNG_DAUER = 5000; // 5 Sekunden Kalibrierung
+double maxLeerlaufWert = 0.0;       // Maximaler gemessener Leerlauf-Wert
+double schwellwert = 0.27;          // Berechneter Schwellwert (Initial-Default)
+const double SCHWELLWERT_OFFSET = 0.01; // Sicherheitsabstand über Leerlauf
+int kalibrierungMessungen = 0;      // Anzahl Kalibrierungs-Messungen
 
 /* ===== STROMSENSOR KONFIGURATION (ACS712) ===== */
 const int Sensor = A0;      // Analoger Eingang für Stromsensor
@@ -124,12 +134,66 @@ void setup() {
    * dxlCom.setGoalPosition(_idZeit, 0); 
    */
 
-  Serial.println("System bereit - Strommessung startet...");
+  // Auto-Kalibrierung starten
+  Serial.println("=== AUTO-KALIBRIERUNG STARTET ===");
+  Serial.println("Bitte 5 Sekunden NICHT in die Pedale treten!");
+  Serial.println("Messe Leerlauf-Rauschen...");
+  kalibrierungStart = millis();
+  maxLeerlaufWert = 0.0;
+  kalibrierungMessungen = 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
 
 void loop() {
+  /* ===== AUTO-KALIBRIERUNG PHASE ===== */
+  if (kalibrierungAktiv) {
+    // Prüfen ob Kalibrierungszeit abgelaufen
+    if (millis() - kalibrierungStart >= KALIBRIERUNG_DAUER) {
+      // Kalibrierung abschließen
+      kalibrierungAktiv = false;
+      schwellwert = maxLeerlaufWert + SCHWELLWERT_OFFSET;
+      
+      Serial.println("=== KALIBRIERUNG ABGESCHLOSSEN ===");
+      Serial.print("Messungen: ");
+      Serial.println(kalibrierungMessungen);
+      Serial.print("Max. Leerlauf-Wert: ");
+      Serial.print(maxLeerlaufWert, 4);
+      Serial.println(" A");
+      Serial.print("Berechneter Schwellwert: ");
+      Serial.print(schwellwert, 4);
+      Serial.println(" A");
+      Serial.println("System bereit - Strommessung startet...");
+      Serial.println("=====================================");
+    } else {
+      // Kalibrierungs-Messungen durchführen
+      sensorwert = analogRead(Sensor);
+      SensorSpannung = (sensorwert / 1024.0) * 5000;
+      Ampere = ((SensorSpannung - Nullpunkt) / VpA);
+      AmpPos = (Ampere < 0) ? 0 : Ampere;
+      
+      // Maximum der Leerlauf-Werte tracken
+      if (AmpPos > maxLeerlaufWert) {
+        maxLeerlaufWert = AmpPos;
+      }
+      
+      kalibrierungMessungen++;
+      
+      // Progress-Anzeige alle Sekunde
+      if (kalibrierungMessungen % (1000/delayms) == 0) {
+        unsigned long verbleibendeZeit = KALIBRIERUNG_DAUER - (millis() - kalibrierungStart);
+        Serial.print("Kalibrierung... ");
+        Serial.print(verbleibendeZeit / 1000);
+        Serial.print("s verbleibend, aktueller Max: ");
+        Serial.print(maxLeerlaufWert, 4);
+        Serial.println(" A");
+      }
+      
+      delay(delayms);
+      return; // Hauptloop überspringen während Kalibrierung
+    }
+  }
+
   /* ===== STROMMESSUNG UND BERECHNUNG ===== */
   
   // ADC-Wert einlesen (0-1023 entspricht 0-5V)
@@ -171,10 +235,9 @@ void loop() {
 
   /* ===== SCHWELLENWERT-LOGIK UND ZUSTANDSSTEUERUNG ===== */
   
-  // Aktivierung bei Überschreitung des Schwellenwerts
-  // 0.27A Mindestchwelle um Messrauschen zu ignorieren
-  // HINWEIS: Temporär auf 0.27A gesetzt (Original: 0.24A für Normalbetrieb)
-  if (AmpPosWeich > 0.27 && Ausschlag > 0) { 
+  // Aktivierung bei Überschreitung des kalibrierten Schwellenwerts
+  // Schwellwert wird automatisch beim Start kalibriert
+  if (AmpPosWeich > schwellwert && Ausschlag > 0) { 
     // Start einer neuen Energieproduktionsphase
     if (running == 0) {
       timerms = fulltime;  // Timer zurücksetzen
@@ -190,8 +253,6 @@ void loop() {
       killTimer++;
       
       // Nach 10 Messzyklen ohne Strom (5 Sekunden) zurücksetzen
-      // HINWEIS: Bedingung temporär geändert für Lasttest
-      // Original: if (Ausschlag == 0) für sofortiges Reset bei Ziel
       if (killTimer > 10) {
         Serial.println(" -> Energieproduktion beendet - Reset");
         running = 0;
@@ -219,6 +280,8 @@ void loop() {
   Serial.print(running);
   Serial.print(",killTimer:");
   Serial.print(killTimer);
+  Serial.print(",schwellwert:");
+  Serial.print(schwellwert, 4);
   Serial.print(",timerms:");
   Serial.print(timerms);
   Serial.print(",AmpCollected:");
